@@ -1,0 +1,30 @@
+{
+  "ecmaFeatures": {
+    "modules": true
+  },
+  "env": {
+    "browser": true,
+    "node": true
+  },
+  "parser": "babel-eslint",
+  "extends": "eslint:recommended",
+  "rules": {
+    "quotes": [1, "single"],
+    "strict": [2, "never"],
+    "semi": [2, "never"],
+    "no-var": 1,
+    "camelcase": 1,
+    "dot-notation": 1,
+    "no-caller": 2,
+    "indent": [2, 2],
+    "no-trailing-spaces": 2,
+    "array-bracket-spacing": [1, "never"],
+    "no-const-assign": 2,
+    "no-unused-vars": [2, {"args": "none"}]
+  },
+  "globals": {
+    "_": false,
+    "$": false
+  },
+  "plugins": []
+}
