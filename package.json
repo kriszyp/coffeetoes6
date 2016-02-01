@@ -1,7 +1,7 @@
 {
   "name": "coffeetoes6",
-  "version": "0.1.0",
-  "description": "A CoffeeScript to ES6 converter, aiming to preserve as much of CoffeeScript syntax as possible, without requiring modification for Redux syntax, sacrificing complete transform for reviewable minimally transformed code.",
+  "version": "0.1.2",
+  "description": "A CoffeeScript to ES6 converter, based on using CoffeeScript to do initial conversion, and then post-conversion fixes to use newer ES6 features",
   "main": "./coffeetoes6.js",
   "bin": {
     "coffeetoes6": "./coffeetoes6"
@@ -16,6 +16,9 @@
     "convert",
     "es6"
   ],
+  "dependencies": {
+    "coffee-script": "1.10.0"
+  },
   "author": "Kris Zyp",
   "license": "MIT"
 }
