@@ -27,7 +27,7 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(thisConvert(functionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))
+    return trailingWhiteSpace(void0ToUndefined(methodConvert(classConvert(thisConvert(functionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line)))))))))))
   }
   function requireToImport(line) {
     return line
@@ -45,7 +45,7 @@ exports.run = function(args){
   function varToLet(line){
     return line.replace(/var (.*)/, (t, variableString) => {
       getCurrentLevel().varLine = currentLineNumber
-      getCurrentLevel().variables = variableString.split(', ')
+      getCurrentLevel().variables = variableString.split(/, ?/).filter((part) => part)
       return 'let ' + variableString
     })
   }
@@ -96,12 +96,59 @@ exports.run = function(args){
     }).replace(/^\s*\}\)\(this\)/, () => '--empty--')
   }
 
+  function classConvert(line){
+    return line.replace(/let (\w+) = \(function\(superClass\) \{/, (t, className) => {
+      getCurrentLevel().className = className
+      getCurrentLevel().classLine = currentLineNumber
+      return 'class ' + className + ' {'
+    })
+      .replace(/\s+extend = function\(child, parent\).*/, '--empty--')
+      .replace(/\s+extend\(\w+, superClass\).*/, '--empty--')
+      .replace(/\s+hasProp = \{\}.hasOwnProperty.*/, '--empty--')
+      .replace(/\}\)\((\w+)\)/, (t, baseClassName) => {
+        let level = getCurrentLevel()
+        if(level.className){
+          lines[level.classLine] = lines[level.classLine].slice(0, -1) + 'extends ' + baseClassName + ' {'
+          level.className = null
+          return '}'
+        }
+        return t
+      })
+  }
+  function methodConvert(line) {
+    return line.replace(/(\w+)\.prototype\.(\w+) = function/, (t, className, methodName) => {
+      // TODO: check class name
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.className === className) {
+        return methodName
+      }
+      return t
+    }).replace(/function (\w+)\(/, (t, className) => {
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.className === className) {
+        return 'constructor('
+      }
+      return t
+    }).replace(/\s+return (\w+)$/, (t, className) => {
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.className === className) {
+        return '--empty--'
+      }
+      return t
+    })
+  }
+  function void0ToUndefined(line) {
+    return line.replace(/void 0/g, 'undefined')
+  }
   function getCurrentVariables() {
     let currentLevel = getCurrentLevel()
     return currentLevel.variables || (currentLevel.variables = {})
   }
   function getCurrentLevel() {
     return indentationLevels[indentationLevels.length - 1]
+  }
+  function getParentLevel() {
+    return indentationLevels[indentationLevels.length - 2]
   }
   let filename = args[0]
   let onNextIndent
@@ -156,7 +203,6 @@ exports.run = function(args){
       }
     }
     line = parse(line)
-    console.log("parsed", lineNumber)
     lastNonEmptyLine = newLines.length
     lastLine = line
     lines[lineNumber] = line
@@ -196,9 +242,13 @@ exports.run = function(args){
     }
   }
   lines.forEach((line, lineNumber) => {
+    console.log(lineNumber, line)
     if (line && line.startsWith('--empty--')) {
       console.log('empty line' ,line)
-      lines[lineNumber - 1] = lines[lineNumber - 1] + line.slice(9) // collect everything after the --empty-- and put it on the last line
+      let afterEmpty = line.slice(line.indexOf('--empty--') + 9)
+      if (afterEmpty) {
+        lines[lineNumber - 1] = (lines[lineNumber - 1] || '') + afterEmpty // collect everything after the --empty-- and put it on the last line
+      }
       lines[lineNumber] = undefined
     }
   })
