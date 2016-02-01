@@ -13,8 +13,8 @@ exports.run = function(args){
       if (t[0] == "'") {
         return t
       } else if(t[0] == '"') {
-        // template
-        return t
+        // convert double quotes to single
+        return "'" + t.slice(1, -1).replace(/'/g, "\\'") + "'"
       } else if (t[0] == '#' && !(t[1] == '#' && t[2] == '#')) {
         // comment
         if(lineNumber > -1){
@@ -27,7 +27,7 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(void0ToUndefined(methodConvert(classConvert(thisConvert(functionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line)))))))))))
+    return trailingWhiteSpace(void0ToUndefined(functionToFat(methodConvert(classConvert(thisConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -68,7 +68,6 @@ exports.run = function(args){
       if (position > -1) {
         variables.splice(position, 1)
         if (variables.length > 0) {
-          console.log('reassigning', varLine, level.indentation + 'let ' + variables.join(', '))
           lines[varLine] = level.indentation + 'let ' + variables.join(', ')
         } else {
           lines[varLine] = undefined
@@ -84,7 +83,7 @@ exports.run = function(args){
     return line.replace(/_this/g, 'this')
   }
   let lastFatArrow
-  function functionToFat(line) {
+  function boundFunctionToFat(line) {
     return line.replace(/\(function\(_this\) \{/, (t) => {
       lastFatArrow = currentLineNumber
       return ''
@@ -94,6 +93,12 @@ exports.run = function(args){
       }
       return t
     }).replace(/^\s*\}\)\(this\)/, () => '--empty--')
+  }
+  function functionToFat(line) {
+    return line.replace(/function(\([^\)]*\)) \{/g, (t, args) => {
+      // TODO: actually verify that `this` is used correctly in function
+      return args + ' => {'
+    })
   }
 
   function classConvert(line){
@@ -117,10 +122,16 @@ exports.run = function(args){
   }
   function methodConvert(line) {
     return line.replace(/(\w+)\.prototype\.(\w+) = function/, (t, className, methodName) => {
-      // TODO: check class name
+      // a method
       let parentLevel = getParentLevel()
       if (parentLevel && parentLevel.className === className) {
         return methodName
+      }
+      return t
+    }).replace(/(\w+)\.prototype\.(\w+) = (.+)/, (t, className, propertyName, value) => {
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.className === className) {
+        return 'get ' + propertyName + '() { return ' + value + ' }'
       }
       return t
     }).replace(/function (\w+)\(/, (t, className) => {
@@ -242,9 +253,7 @@ exports.run = function(args){
     }
   }
   lines.forEach((line, lineNumber) => {
-    console.log(lineNumber, line)
     if (line && line.startsWith('--empty--')) {
-      console.log('empty line' ,line)
       let afterEmpty = line.slice(line.indexOf('--empty--') + 9)
       if (afterEmpty) {
         lines[lineNumber - 1] = (lines[lineNumber - 1] || '') + afterEmpty // collect everything after the --empty-- and put it on the last line
