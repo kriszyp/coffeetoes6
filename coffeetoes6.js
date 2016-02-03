@@ -27,7 +27,7 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(void0ToUndefined(functionToFat(methodConvert(classConvert(thisConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))))))
+    return trailingWhiteSpace(void0ToUndefined(functionToFat(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line)))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -121,23 +121,50 @@ exports.run = function(args){
       })
   }
   function methodConvert(line) {
-    return line.replace(/(\w+)\.prototype\.(\w+) = function/, (t, className, methodName) => {
+    return line.replace(/(\w+)\.prototype\.(\w+) = function(\([^\)]*\))/, (t, className, methodName, methodArgs) => {
       // a method
       let parentLevel = getParentLevel()
       if (parentLevel && parentLevel.className === className) {
-        return methodName
+        parentLevel.lastMethodArgs = methodArgs
+        return methodName + methodArgs
       }
       return t
     }).replace(/(\w+)\.prototype\.(\w+) = (.+)/, (t, className, propertyName, value) => {
+      // a property
       let parentLevel = getParentLevel()
       if (parentLevel && parentLevel.className === className) {
         return 'get ' + propertyName + '() { return ' + value + ' }'
       }
       return t
-    }).replace(/function (\w+)\(/, (t, className) => {
+    }).replace(/(\w+)\.(\w+) = function(\([^\)]*\))/, (t, className, methodName, methodArgs) => {
+      // a static method
       let parentLevel = getParentLevel()
       if (parentLevel && parentLevel.className === className) {
-        return 'constructor('
+        parentLevel.lastMethodArgs = methodArgs
+        return 'static ' + methodName + methodArgs
+      }
+      return t
+    }).replace(/(\w+)\.__super__\.(\w+)\.apply\(this, arguments\)/, (t, className, methodName, value) => {
+      // super call
+      let i = 1
+      let parentLevel
+      let lastMethodArgs
+      while ((parentLevel = indentationLevels[indentationLevels.length - ++i])) {
+        lastMethodArgs = lastMethodArgs || parentLevel.lastMethodArgs
+        if (parentLevel.className === className) {
+          if (methodName === 'constructor') {
+            return 'super' + lastMethodArgs
+          } else {
+            return 'super.' + methodName + lastMethodArgs
+          }
+        }
+      }
+      return t
+    }).replace(/function (\w+)(\([^\)]*\))/, (t, className, constructorArgs) => {
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.className === className) {
+        parentLevel.lastMethodArgs = constructorArgs
+        return 'constructor' + constructorArgs
       }
       return t
     }).replace(/\s+return (\w+)$/, (t, className) => {
@@ -147,6 +174,13 @@ exports.run = function(args){
       }
       return t
     })
+  }
+  function indexOfConvert(line) {
+    return line
+      .replace(/\s+indexOf = \[\]\.indexOf \|\| .*/, '--empty--')
+      .replace(/indexOf\.call\(([^,]+), ([^\)]+)\) >= 0/g, (t, array, item) => {
+        return array + '.indexOf(' + item + ') >= 0'
+      })
   }
   function void0ToUndefined(line) {
     return line.replace(/void 0/g, 'undefined')
@@ -173,6 +207,7 @@ exports.run = function(args){
       sourceMap: true
   })
   let jsContents = compileResults.js
+  console.log(jsContents)
   let sourceMap = compileResults.sourceMap
 
   let lines = jsContents.split(/\r?\n/)
@@ -253,12 +288,19 @@ exports.run = function(args){
     }
   }
   lines.forEach((line, lineNumber) => {
+    let lastLine = lines[lineNumber - 1]
     if (line && line.startsWith('--empty--')) {
       let afterEmpty = line.slice(line.indexOf('--empty--') + 9)
       if (afterEmpty) {
-        lines[lineNumber - 1] = (lines[lineNumber - 1] || '') + afterEmpty // collect everything after the --empty-- and put it on the last line
+        lines[lineNumber - 1] = (lastLine || '') + afterEmpty // collect everything after the --empty-- and put it on the last line
       }
       lines[lineNumber] = undefined
+    }
+    if (line == '') {
+      // eliminate the extra lines at the top level
+      if (lastLine && !lastLine.match(/^\s/)) {
+        lines[lineNumber] = undefined
+      }
     }
   })
   let jsOutput = lines.filter((line) => typeof line == 'string').join('\n')

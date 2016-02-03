@@ -1,6 +1,6 @@
 {
   "name": "coffeetoes6",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A CoffeeScript to ES6 converter, based on using CoffeeScript to do initial conversion, and then post-conversion fixes to use newer ES6 features",
   "main": "./coffeetoes6.js",
   "bin": {
