@@ -1,12 +1,11 @@
 "use strict"
 const fs = require('fs')
-const coffee = require('coffeescript')
+const coffee = require('coffee-script')
 
 
 exports.run = function(args){
 
   let commentsToAdd = []
-  let nextId = 1
   let currentLevel
   function parseStringsAndComments(line, lineNumber) {
     return line.replace(/'(?:\s*\\.|[^'])*'|"(?:\\.|[^"])*"|#.+|[^'"#]*/g, (t) => {
@@ -27,7 +26,7 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(void0ToUndefined(functionToFat(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line)))))))))))))
+    return trailingWhiteSpace(void0ToUndefined(functionToFat(objectMethodConvert(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -175,6 +174,14 @@ exports.run = function(args){
       return t
     })
   }
+
+  function objectMethodConvert(line) {
+    return line.replace(/(\w+):\s*function/, (t, methodName) => {
+      // a method
+      return methodName
+    })
+  }
+
   function indexOfConvert(line) {
     return line
       .replace(/\s+indexOf = \[\]\.indexOf \|\| .*/, '--empty--')
@@ -202,12 +209,11 @@ exports.run = function(args){
   sourceLines.forEach(parseStringsAndComments)
 
   let compileResults = coffee.compile(coffeeContents, {
-      bare: true,
-      header: false,
-      sourceMap: true
+    bare: true,
+    header: false,
+    sourceMap: true
   })
   let jsContents = compileResults.js
-  console.log(jsContents)
   let sourceMap = compileResults.sourceMap
 
   let lines = jsContents.split(/\r?\n/)
