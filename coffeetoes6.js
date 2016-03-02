@@ -101,18 +101,26 @@ exports.run = function(args){
   }
 
   function classConvert(line){
-    return line.replace(/let (\w+) = \(function\(superClass\) \{/, (t, className) => {
-      getCurrentLevel().className = className
-      getCurrentLevel().classLine = currentLineNumber
-      return 'class ' + className + ' {'
+    return line.replace(/let (\w+) = \(function\((superClass)?\) \{/, (t, className) => {
+      let line = sourceMap.lines[currentLineNumber]
+      if (line && line.columns.some((column) => {
+        let sourceLine = sourceLines[column.sourceLine]
+        return sourceLine && sourceLine.indexOf('class ') > -1
+      })) {
+        getCurrentLevel().className = className
+        getCurrentLevel().classLine = currentLineNumber
+        return 'class ' + className + ' {'
+      }
     })
       .replace(/\s+extend = function\(child, parent\).*/, '--empty--')
       .replace(/\s+extend\(\w+, superClass\).*/, '--empty--')
       .replace(/\s+hasProp = \{\}.hasOwnProperty.*/, '--empty--')
-      .replace(/\}\)\((\w+)\)/, (t, baseClassName) => {
+      .replace(/\}\)\((\w*)\)/, (t, baseClassName) => {
         let level = getCurrentLevel()
         if(level.className){
-          lines[level.classLine] = lines[level.classLine].slice(0, -1) + 'extends ' + baseClassName + ' {'
+          if (baseClassName) {
+            lines[level.classLine] = lines[level.classLine].slice(0, -1) + 'extends ' + baseClassName + ' {'
+          }
           level.className = null
           return '}'
         }
