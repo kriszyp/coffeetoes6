@@ -26,7 +26,7 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(void0ToUndefined(functionToFat(objectMethodConvert(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))))))))
+    return trailingWhiteSpace(void0ToUndefined(forOf(functionToFat(objectMethodConvert(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line)))))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -97,6 +97,36 @@ exports.run = function(args){
     return line.replace(/function(\([^\)]*\)) \{/g, (t, args) => {
       // TODO: actually verify that `this` is used correctly in function
       return args + ' => {'
+    })
+  }
+
+  function forOf(line) {
+    return line.
+    replace(/\s*(ref\d*) = (.*)/, (t, ref, expression) => {
+      let currentLevel = getCurrentLevel()
+      currentLevel.forOfRefLine = currentLineNumber
+      currentLevel.forOfRefName = ref
+      currentLevel.forOfRefExpression = expression
+      return t
+    }).replace(/for \((\w) = 0, (len\d*) = (\w+)\.length; \w < len\d*; \w\+\+\)/, (t, i, len, array) => {
+      consumeVariable(i)
+      consumeVariable(len)
+      let currentLevel = getCurrentLevel()
+      currentLevel.arrayName = array
+      if (currentLevel.forOfRefName === array) {
+        lines[currentLevel.forOfRefLine] = '--empty--'
+        array = currentLevel.forOfRefExpression
+      }
+      currentLevel.forOfLine = currentLineNumber
+      currentLevel.iName = i
+      return 'for (let __value__ of ' + array + ')'
+    }).replace(/\s+(\w+) = (\w+)\[(\w+)\]/, (t, item, array, i) => {
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.arrayName === array && parentLevel.iName === i) {
+        lines[parentLevel.forOfLine] = lines[parentLevel.forOfLine].replace(/__value__/, item)
+        return '--empty--'
+      }
+      return t
     })
   }
 
@@ -283,7 +313,7 @@ exports.run = function(args){
                 lines[targetLineNumber + offset] += ' ' + commentToAdd
                 return true
               } else if (column.sourceLine > sourceLineNumber) {
-                let lastLine = lines[targetLineNumber + offset]
+                let lastLine = lines[targetLineNumber + offset] || ''
                 lines.splice(targetLineNumber + offset++, 0, lastLine.replace(/\S.*/, '') + commentToAdd)
                 return true
               }
