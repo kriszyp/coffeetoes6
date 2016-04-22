@@ -311,7 +311,7 @@ exports.run = function(args){
           found = line.columns.some((column) => {
             if (column) {
               if (column.sourceLine === sourceLineNumber) {
-                lines[targetLineNumber + offset] += ' ' + commentToAdd
+                lines[targetLineNumber + offset] = (lines[targetLineNumber + offset] || '') + ' ' + commentToAdd
                 return true
               } else if (column.sourceLine > sourceLineNumber) {
                 let lastLine = lines[targetLineNumber + offset] || ''
