@@ -141,6 +141,7 @@ exports.run = function(args){
         getCurrentLevel().classLine = currentLineNumber
         return 'class ' + className + ' {'
       }
+      return t
     })
       .replace(/\s+extend = function\(child, parent\).*/, '--empty--')
       .replace(/\s+extend\(\w+, superClass\).*/, '--empty--')
