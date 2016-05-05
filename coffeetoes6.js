@@ -26,7 +26,7 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(void0ToUndefined(forOf(functionToFat(objectMethodConvert(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line)))))))))))))))
+    return trailingWhiteSpace(stringPropertyConvert(void0ToUndefined(forOf(functionToFat(objectMethodConvert(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -191,7 +191,7 @@ exports.run = function(args){
         lastMethodArgs = lastMethodArgs || parentLevel.lastMethodArgs
         if (parentLevel.className === className) {
           if (methodName === 'constructor') {
-            return 'super' + lastMethodArgs
+            return 'super(...arguments)'
           } else {
             return 'super.' + methodName + lastMethodArgs
           }
@@ -228,6 +228,11 @@ exports.run = function(args){
         return array + '.indexOf(' + item + ') >= 0'
       })
   }
+  function stringPropertyConvert(line) {
+    return line.replace(/(\w+)\['(\w+)'\]/g, (t, object, property) => {
+      return object + '.' + property
+    })
+  }
   function void0ToUndefined(line) {
     return line.replace(/void 0/g, 'undefined')
   }
@@ -240,6 +245,15 @@ exports.run = function(args){
   }
   function getParentLevel() {
     return indentationLevels[indentationLevels.length - 2]
+  }
+  function postProcess(js) {
+    return trailingSpaceBeforeBracket(removeEmptyConstructors(js))
+  }
+  function removeEmptyConstructors(js) {
+    return js.replace(/constructor\(\)\s\{\s+return super\(\.\.\.arguments\)\s+\}\s+/g, '')
+  }
+  function trailingSpaceBeforeBracket(js) {
+    return js.replace(/\n+\}/g, '\n}')
   }
   let filename = args[0]
   let onNextIndent
@@ -348,7 +362,12 @@ exports.run = function(args){
       }
     }
   })
+  while(!lines[0]) {
+    // remove initial empty lines
+    lines.shift()
+  }
   let jsOutput = lines.filter((line) => typeof line == 'string').join('\n')
 
+  jsOutput = postProcess(jsOutput)
   fs.writeFileSync(filename.replace(/\.coffee/, '.js'), jsOutput, 'utf8')
 }
