@@ -6,7 +6,6 @@
     "browser": true,
     "node": true
   },
-  "parser": "babel-eslint",
   "extends": "eslint:recommended",
   "rules": {
     "quotes": [1, "single"],
