@@ -26,7 +26,24 @@ exports.run = function(args){
     })
   }
   function parse(line){
-    return trailingWhiteSpace(stringPropertyConvert(void0ToUndefined(forOf(functionToFat(objectMethodConvert(methodConvert(classConvert(thisConvert(indexOfConvert(boundFunctionToFat(assignment(varToLet(semicolons(requireToImport(parseStringsAndComments(line))))))))))))))))
+    return trailingWhiteSpace(
+      boundMethods(
+        existentialPropertyAccess(
+          stringPropertyConvert(
+            void0ToUndefined(
+              forOf(
+                functionToFat(
+                  objectMethodConvert(
+                    methodConvert(
+                      classConvert(
+                        thisConvert(
+                          indexOfConvert(
+                            boundFunctionToFat(
+                              assignment(
+                                varToLet(
+                                  semicolons(
+                                    requireToImport(
+                                      parseStringsAndComments(line))))))))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -96,6 +113,9 @@ exports.run = function(args){
   function functionToFat(line) {
     return line.replace(/function(\([^\)]*\)) \{/g, (t, args) => {
       // TODO: actually verify that `this` is used correctly in function
+      if (args.indexOf(',') === -1) {
+        return args.slice(1, -1) + ' => {'
+      }
       return args + ' => {'
     })
   }
@@ -130,6 +150,19 @@ exports.run = function(args){
     })
   }
 
+  function existentialPropertyAccess(line) {
+    let needsProcessing = true
+    while(needsProcessing) {
+      needsProcessing = false
+      line = line.replace(/\((ref\d*) = ([^\)]+)\) != null \? ref\d*\.(\w+) : undefined/g, (t, ref, expression, property) => {
+        consumeVariable(ref)
+        needsProcessing = true
+        return expression + ' && ' + expression + '.' + property
+      })
+    }
+    return line
+  }
+
   function classConvert(line){
     return line.replace(/let (\w+) = \(function\((superClass)?\) \{/, (t, className) => {
       let line = sourceMap.lines[currentLineNumber]
@@ -139,7 +172,7 @@ exports.run = function(args){
       })) {
         getCurrentLevel().className = className
         getCurrentLevel().classLine = currentLineNumber
-        return 'class ' + className + ' {'
+        return '\nclass ' + className + ' {'
       }
       return t
     })
@@ -236,6 +269,20 @@ exports.run = function(args){
   function void0ToUndefined(line) {
     return line.replace(/void 0/g, 'undefined')
   }
+
+  function boundMethods(line) {
+    return line.replace(/  bind = function\(fn, me\)\{ return function\(\)\{ return fn\.apply\(me, arguments\); \}; \}/, '--empty--')
+      .replace(/\s*this\.(\w+) = bind\(this\.\w+, this\)/g, (t, method) => {
+        boundMethodNames[method] = true
+        return '--empty--'
+      }).replace(/this\.(\w+)([^\(\w])/g, (t, method, nextChar) => {
+        if (boundMethodNames[method]) {
+          return 'this.' + method + '.bind(this)' + nextChar
+        }
+        return t
+      })
+  }
+
   function getCurrentVariables() {
     let currentLevel = getCurrentLevel()
     return currentLevel.variables || (currentLevel.variables = {})
@@ -247,7 +294,9 @@ exports.run = function(args){
     return indentationLevels[indentationLevels.length - 2]
   }
   function postProcess(js) {
-    return trailingSpaceBeforeBracket(removeEmptyConstructors(js))
+    return trailingSpaceBeforeBracket(
+      removeEmptyConstructors(
+        collapseFatArrowExpression(js)))
   }
   function removeEmptyConstructors(js) {
     return js.replace(/constructor\(\)\s\{\s+return super\(\.\.\.arguments\)\s+\}\s+/g, '')
@@ -255,6 +304,11 @@ exports.run = function(args){
   function trailingSpaceBeforeBracket(js) {
     return js.replace(/\n+\}/g, '\n}')
   }
+  function collapseFatArrowExpression(js) {
+    return js.replace(/ => \{\n\s*return (.+)\n\s*}/g, (t, expression) => ' => ' + expression)
+  }
+
+  let boundMethodNames = {}
   let filename = args[0]
   let onNextIndent
   let coffeeContents = fs.readFileSync(filename, 'utf8')
