@@ -17,7 +17,8 @@
     "es6"
   ],
   "dependencies": {
-    "coffee-script": "1.10.0"
+    "coffee-script": "1.10.0",
+    "glob": "~7"
   },
   "author": "Kris Zyp",
   "license": "MIT"

@@ -1,9 +1,10 @@
 "use strict"
 const fs = require('fs')
+const glob = require('glob')
 const coffee = require('coffee-script')
 
 
-exports.run = function(args){
+exports.processFile = function(filename){
 
   let commentsToAdd = []
   let currentLevel
@@ -28,22 +29,24 @@ exports.run = function(args){
   function parse(line){
     return trailingWhiteSpace(
       boundMethods(
-        existentialPropertyAccess(
-          stringPropertyConvert(
-            void0ToUndefined(
-              forOf(
-                functionToFat(
-                  objectMethodConvert(
-                    methodConvert(
-                      classConvert(
-                        thisConvert(
-                          indexOfConvert(
-                            boundFunctionToFat(
-                              assignment(
-                                varToLet(
-                                  semicolons(
-                                    requireToImport(
-                                      parseStringsAndComments(line))))))))))))))))))
+        nullCoalesce(
+          indexOf(
+            existentialPropertyAccess(
+              stringPropertyConvert(
+                void0ToUndefined(
+                  forOf(
+                    functionToFat(
+                      objectMethodConvert(
+                        methodConvert(
+                          classConvert(
+                            thisConvert(
+                              indexOfConvert(
+                                boundFunctionToFat(
+                                  assignment(
+                                    varToLet(
+                                      semicolons(
+                                        requireToImport(
+                                          parseStringsAndComments(line))))))))))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -163,6 +166,21 @@ exports.run = function(args){
     return line
   }
 
+  function nullCoalesce(line) {
+    return line.replace(/\((ref\d*) = ([^\)]+)\) != null \? ref\d* :/, (t, ref, expression) => {
+      consumeVariable(ref)
+      return expression + ' ||'
+    })
+  }
+
+  function indexOf(line) {
+    return line.replace(/(ref\d*) = ([^,]+), (.+)\.indexOf\(ref\d*\) >= 0/, (t, ref, item, array) => {
+      consumeVariable(ref)
+      return array + '.indexOf(' + item + ') >= 0'
+    })
+  }
+
+
   function classConvert(line){
     return line.replace(/let (\w+) = \(function\((superClass)?\) \{/, (t, className) => {
       let line = sourceMap.lines[currentLineNumber]
@@ -177,9 +195,9 @@ exports.run = function(args){
       return t
     })
       .replace(/\s+extend = function\(child, parent\).*/, '--empty--')
-      .replace(/\s+extend\(\w+, superClass\).*/, '--empty--')
+      .replace(/\s+extend\([\w\.]+, superClass\).*/, '--empty--')
       .replace(/\s+hasProp = \{\}.hasOwnProperty.*/, '--empty--')
-      .replace(/\}\)\((\w*)\)/, (t, baseClassName) => {
+      .replace(/\}\)\(([\w\.]*)\)/, (t, baseClassName) => {
         let level = getCurrentLevel()
         if(level.className){
           if (baseClassName) {
@@ -215,8 +233,15 @@ exports.run = function(args){
         return 'static ' + methodName + methodArgs
       }
       return t
+    }).replace(/(\w+)\.(\w+) = (.+)/, (t, className, propertyName, value) => {
+      // a static property
+      let parentLevel = getParentLevel()
+      if (parentLevel && parentLevel.className === className) {
+        return 'static get ' + propertyName + '() { return ' + value + ' }'
+      }
+      return t
     }).replace(/(\w+)\.__super__\.(\w+)\.apply\(this, arguments\)/, (t, className, methodName, value) => {
-      // super call
+      // super call with implied arguments
       let i = 1
       let parentLevel
       let lastMethodArgs
@@ -227,6 +252,22 @@ exports.run = function(args){
             return 'super(...arguments)'
           } else {
             return 'super.' + methodName + lastMethodArgs
+          }
+        }
+      }
+      return t
+    }).replace(/(\w+)\.__super__\.(\w+)\.call\(this,? ?([^\)]*)\)/, (t, className, methodName, args, value) => {
+      // super call with explicit arguments
+      let i = 1
+      let parentLevel
+      let lastMethodArgs
+      while ((parentLevel = indentationLevels[indentationLevels.length - ++i])) {
+        lastMethodArgs = lastMethodArgs || parentLevel.lastMethodArgs
+        if (parentLevel.className === className) {
+          if (methodName === 'constructor') {
+            return 'super(' + args + ')'
+          } else {
+            return 'super.' + methodName + '(' + args + ')'
           }
         }
       }
@@ -271,7 +312,7 @@ exports.run = function(args){
   }
 
   function boundMethods(line) {
-    return line.replace(/  bind = function\(fn, me\)\{ return function\(\)\{ return fn\.apply\(me, arguments\); \}; \}/, '--empty--')
+    return line.replace(/  bind = function\(fn, me\)\{ return function\(\)\{ return fn\.apply\(me, arguments\); \}; \},?/, '--empty--')
       .replace(/\s*this\.(\w+) = bind\(this\.\w+, this\)/g, (t, method) => {
         boundMethodNames[method] = true
         return '--empty--'
@@ -309,7 +350,6 @@ exports.run = function(args){
   }
 
   let boundMethodNames = {}
-  let filename = args[0]
   let onNextIndent
   let coffeeContents = fs.readFileSync(filename, 'utf8')
   let sourceLines = coffeeContents.split(/\r?\n/)
@@ -333,39 +373,52 @@ exports.run = function(args){
   let lastLine
   let lastLineIsCall
   let currentLineNumber
+  let inComments = false
   lines.forEach((line, lineNumber) => {
-    let indentation = ''
-    currentLineNumber = lineNumber
-    let afterIndent = line.replace(/^[ \t]+/, (t) => {
-      indentation = t
-      return ''
-    })
-    if (!afterIndent) {
-      return
-    }
-    if (indentation.length > lastIndentation.length) {
-      indentationLevels.push(currentLevel = {
-        indentation: indentation
-      })
-      if (onNextIndent) {
-        onNextIndent()
-        onNextIndent = null
+    try {
+      if (line.match(/\s*\/\*/)) {
+        inComments = true
       }
-    } else if (indentation.length < lastIndentation.length) {
-      do {
-        indentationLevels.pop()
-        currentLevel = indentationLevels[indentationLevels.length - 1]
-      } while (currentLevel.indentation != indentation && indentationLevels.length > 0)
-    } else {
-      if (currentLevel){
-        currentLevel.lastLine = lastLine
+      if (!inComments) {
+        let indentation = ''
+        currentLineNumber = lineNumber
+        let afterIndent = line.replace(/^[ \t]+/, (t) => {
+          indentation = t
+          return ''
+        })
+        if (!afterIndent) {
+          return
+        }
+        if (indentation.length > lastIndentation.length) {
+          indentationLevels.push(currentLevel = {
+            indentation: indentation
+          })
+          if (onNextIndent) {
+            onNextIndent()
+            onNextIndent = null
+          }
+        } else if (indentation.length < lastIndentation.length) {
+          do {
+            indentationLevels.pop()
+            currentLevel = indentationLevels[indentationLevels.length - 1]
+          } while (currentLevel.indentation != indentation && indentationLevels.length > 0)
+        } else {
+          if (currentLevel){
+            currentLevel.lastLine = lastLine
+          }
+        }
+        line = parse(line)
+        lastNonEmptyLine = newLines.length
+        lastIndentation = indentation
       }
+      lastLine = line
+      lines[lineNumber] = line
+      if (line.match(/\s*\*\//)) {
+        inComments = false
+      }
+    } catch (error) {
+      console.error(error, 'on line', lineNumber, line, 'in', filename)
     }
-    line = parse(line)
-    lastNonEmptyLine = newLines.length
-    lastLine = line
-    lines[lineNumber] = line
-    lastIndentation = indentation
   })
 
   let offset = 0
@@ -424,4 +477,16 @@ exports.run = function(args){
 
   jsOutput = postProcess(jsOutput)
   fs.writeFileSync(filename.replace(/\.coffee/, '.js'), jsOutput, 'utf8')
+}
+
+exports.run = function(args){
+  glob(args[0], (error, filenames) => {
+    if (error) {
+      return console.error(error)
+    }
+    if (!filenames) {
+      console.log(args[0], 'not found')
+    }
+    filenames.forEach(exports.processFile)
+  })
 }
