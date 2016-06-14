@@ -28,25 +28,27 @@ exports.processFile = function(filename){
   }
   function parse(line){
     return trailingWhiteSpace(
-      boundMethods(
-        nullCoalesce(
-          indexOf(
-            existentialPropertyAccess(
-              stringPropertyConvert(
-                void0ToUndefined(
-                  forOf(
-                    functionToFat(
-                      objectMethodConvert(
-                        methodConvert(
-                          classConvert(
-                            thisConvert(
-                              indexOfConvert(
-                                boundFunctionToFat(
-                                  assignment(
-                                    varToLet(
-                                      semicolons(
-                                        requireToImport(
-                                          parseStringsAndComments(line))))))))))))))))))))
+      callSpread(
+        argumentSpread(
+          boundMethods(
+            nullCoalesce(
+              indexOf(
+                existentialPropertyAccess(
+                  stringPropertyConvert(
+                    void0ToUndefined(
+                      forOf(
+                        functionToFat(
+                          objectMethodConvert(
+                            methodConvert(
+                              classConvert(
+                                thisConvert(
+                                  indexOfConvert(
+                                    boundFunctionToFat(
+                                      assignment(
+                                        varToLet(
+                                          semicolons(
+                                            requireToImport(
+                                              parseStringsAndComments(line))))))))))))))))))))))
   }
   function requireToImport(line) {
     return line
@@ -116,12 +118,14 @@ exports.processFile = function(filename){
   function functionToFat(line) {
     return line.replace(/function(\([^\)]*\)) \{/g, (t, args) => {
       // TODO: actually verify that `this` is used correctly in function
-      if (args.indexOf(',') === -1) {
+      if (args.length > 2 && args.indexOf(',') === -1) {
+        // single arg doesn't need paranthesis
         return args.slice(1, -1) + ' => {'
       }
       return args + ' => {'
     })
   }
+
 
   function forOf(line) {
     return line.
@@ -215,6 +219,7 @@ exports.processFile = function(filename){
       let parentLevel = getParentLevel()
       if (parentLevel && parentLevel.className === className) {
         parentLevel.lastMethodArgs = methodArgs
+        getCurrentLevel().lastMethodLine = currentLineNumber
         return methodName + methodArgs
       }
       return t
@@ -347,6 +352,27 @@ exports.processFile = function(filename){
   }
   function collapseFatArrowExpression(js) {
     return js.replace(/ => \{\n\s*return (.+)\n\s*}/g, (t, expression) => ' => ' + expression)
+  }
+
+  function argumentSpread(js) {
+    return js.replace(/let (\w+) = 1 <= arguments\.length \? slice\.call\(arguments, (\d)\) : \[\]/, (t, variable, index) => {
+      let parentLevel = getParentLevel()
+      let lastMethodLine = parentLevel.lastMethodLine
+      if (lastMethodLine > 0) {
+        lines[lastMethodLine] = lines[lastMethodLine].replace(/\)/, '...' + variable + ')')
+        return ''
+      }
+      return t
+    })
+
+  }
+
+  function callSpread(js) {
+    return js.replace(/(\w+).apply\(\w+, \[([^\]]+)\]\.concat\(slice.call\((\w+)\)\)\)/, (t, func, firstArgs, args) => {
+      return func + '(' + firstArgs + ', ...' + args + ')'  
+    }).replace(/(\w+).apply\(\w+, (\w+)\)/, (t, func, args) => {
+      return func + '(...' + args + ')'
+    }).replace(/\s+slice = \[\]\.slice.*/, '--empty--')
   }
 
   let boundMethodNames = {}
